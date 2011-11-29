@@ -3,15 +3,17 @@
 import sqlite3
 import csv
 import sys
+import os
 import argparse
 
-def compare(file1, file2, id_column):
+def compare(file1, file2, id_column, database):
     """
     Compare two csv files
 
     file1 - The first file
     file2 - The second file
     id_column - The name of the column containing the unique ID
+    database - sqlite database file path or :memory:
     """
     # get a couple of csv readers from the files
     f1=open(file1, 'rb')
@@ -28,8 +30,8 @@ def compare(file1, file2, id_column):
     if id_column not in header1:
         raise Exception('The id coumn does not exist')
 
-    # create an in-memory db
-    conn=sqlite3.connect(':memory:')
+    # create a db
+    conn=sqlite3.connect(database)
 
     # assemble create table statement
     col_sql='(__row_id integer primary key, __file_id integer, ' \
@@ -182,14 +184,23 @@ def main(argv=None):
     parser.add_argument('file2', help='second file')
     parser.add_argument('identity_col', metavar='identity column',
         help='identity column name')
+    parser.add_argument('-d', '--database', metavar='db',
+            default=':memory:',
+            help='sqlite3 database file to be created. :memory: is a ' \
+                'special type and will cause no file to be created.')
 
     args=parser.parse_args(argv[1:])
 
     file1=args.file1
     file2=args.file2
     identity_col=args.identity_col
+    database=args.database
 
-    compare(file1, file2, identity_col)
+    if os.path.exists(database):
+        raise argparse.ArgumentTypeError('database file %s already exists' \
+            % (database,))
+
+    compare(file1, file2, identity_col, database)
 
 if __name__ == "__main__":
         sys.exit(main())
