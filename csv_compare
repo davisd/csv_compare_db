@@ -3,6 +3,7 @@
 import sqlite3
 import csv
 import sys
+import argparse
 
 def compare(file1, file2, id_column):
     """
@@ -175,10 +176,20 @@ def compare(file1, file2, id_column):
 def main(argv=None):
     if argv is None:
         argv = sys.argv
-    if len(argv) != 4:
-        sys.stderr.write('Usage: %s file1 file2 id_column\n' % (argv[0],))
-        return 1
-    compare(sys.argv[1], sys.argv[2], sys.argv[3])
+
+    parser=argparse.ArgumentParser(description='compare two csv files')
+    parser.add_argument('file1', help='first file')
+    parser.add_argument('file2', help='second file')
+    parser.add_argument('identity_col', metavar='identity column',
+        help='identity column name')
+
+    args=parser.parse_args(argv[1:])
+
+    file1=args.file1
+    file2=args.file2
+    identity_col=args.identity_col
+
+    compare(file1, file2, identity_col)
 
 if __name__ == "__main__":
         sys.exit(main())
