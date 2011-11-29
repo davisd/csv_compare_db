@@ -49,14 +49,16 @@ def compare(file1, file2, id_column, database):
         row_count+=1
         sql="""insert into cmp values (NULL, 1, ?, %s)""" % \
             (','.join(['?'] * len(row)))
-        conn.execute(sql, [row_count] + [unicode(r, encoding='utf-8') for r in row])
+        conn.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
+            for c in row])
 
     row_count=1
     for row in csv2:
         row_count+=1
         sql="""insert into cmp values (NULL, 2, ?, %s)""" % \
             (','.join(['?'] * len(row)))
-        conn.execute(sql, [row_count] + [unicode(r, encoding='utf-8') for r in row])
+        conn.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
+            for c in row])
 
     # Find duplicate rows within the same files
     c=conn.cursor()
