@@ -37,14 +37,17 @@ def compare(file1, file2, id_column, conn, table_name):
         col_sql+='%s text, ' % (col,)
     col_sql='%s)' % (col_sql[:-2],)
 
+    # get our first cursor
+    c=conn.cursor()
+
     # Create the comparison table
-    conn.execute('create table %s %s' % (table_name, col_sql,))
+    c.execute('create table %s %s' % (table_name, col_sql,))
 
     # Create indexes
-    conn.execute('create index __file_id_index on %s (__file_id)' \
+    c.execute('create index __file_id_index on %s (__file_id)' \
         % (table_name,))
 
-    conn.execute('create index __%(id_column)s_index on %(table_name)s ' \
+    c.execute('create index __%(id_column)s_index on %(table_name)s ' \
         '(%(id_column)s)' \
         % {'table_name': table_name, 'id_column': id_column})
 
@@ -54,7 +57,7 @@ def compare(file1, file2, id_column, conn, table_name):
         row_count+=1
         sql="""insert into %s values (NULL, 1, ?, %s)""" % \
             (table_name, ','.join(['?'] * len(row)),)
-        conn.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
+        c.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
             for c in row])
 
     row_count=1
@@ -62,11 +65,13 @@ def compare(file1, file2, id_column, conn, table_name):
         row_count+=1
         sql="""insert into %s values (NULL, 2, ?, %s)""" % \
             (table_name, ','.join(['?'] * len(row)),)
-        conn.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
+        c.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
             for c in row])
 
-    # Find duplicate rows within the same files
+    c.close()
     c=conn.cursor()
+
+    # Find duplicate rows within the same files
     c.execute(
     """ select %(id_column)s from %(table_name)s
         where __file_id=1
