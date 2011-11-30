@@ -30,64 +30,60 @@ def compare(file1, file2, id_column, conn, table_name):
     if id_column not in header1:
         raise Exception('The id coumn does not exist')
 
-    # assemble create table statement
-    col_sql='(__file_id integer, __line_number integer, '
-    for col in header1:
-        col_sql+='%s text, ' % (col,)
-    col_sql='%s)' % (col_sql[:-2],)
+    id_column_index=header1.index(id_column)
 
     # get our first cursor
     c=conn.cursor()
 
     # Create the comparison table
-    c.execute('create table %s %s' % (table_name, col_sql,))
+    c.execute('create table %s (hashed_id int, id text, file_id integer, line_number integer, ' \
+        'hashed integer, csv text)' % (table_name, ))
 
     # Create indexes
-    c.execute('create index __file_id_index on %s (__file_id)' \
+    c.execute('create index hashed_id_index on %s (hashed_id)' \
         % (table_name,))
 
-    c.execute('create index __%(id_column)s_index on %(table_name)s ' \
-        '(%(id_column)s)' \
-        % {'table_name': table_name, 'id_column': id_column})
+    # Create indexes
+    c.execute('create index file_id_index on %s (file_id)' \
+        % (table_name,))
+
+    # Create indexes
+    c.execute('create index hashed_index on %s (hashed)' \
+        % (table_name,))
 
     # read the data into the table
-
-    # assemble column SQL
-    col_sql='__file_id, __line_number, '
-    for col in header1:
-        col_sql+='%s, ' % (col,)
-    col_sql='%s' % (col_sql[:-2],)
 
     row_count=1
     for row in csv1:
         row_count+=1
-        sql="""insert into %s (%s) values (1, %d, '%s')""" % \
-            (table_name, col_sql, row_count,
-            "','".join([unicode(col, encoding='utf-8').replace("'", "''") \
-                for col in row]),)
+        csv_text=unicode(','.join(row), encoding='utf-8').replace("'", "''")
+        sql="""insert into %s (hashed_id, id, file_id, line_number, hashed, csv) values (%d, '%s', 1, %d, %d, '%s')""" % \
+            (table_name, hash(row[id_column_index]), row[id_column_index], row_count, hash(csv_text), csv_text)
+
         c.execute(sql)
 
     row_count=1
     for row in csv2:
         row_count+=1
-        sql="""insert into %s (%s) values (2, %d, '%s')""" % \
-            (table_name, col_sql, row_count,
-            "','".join([unicode(col, encoding='utf-8').replace("'", "''") \
-                for col in row]),)
+        csv_text=unicode(','.join(row), encoding='utf-8').replace("'", "''")
+        sql="""insert into %s (hashed_id, id, file_id, line_number, hashed, csv) values (%d, '%s', 2, %d, %d, '%s')""" % \
+            (table_name, hash(row[id_column_index]), row[id_column_index], row_count, hash(csv_text), csv_text)
         c.execute(sql)
+
+    conn.commit();
 
     c.close()
     c=conn.cursor()
 
     # Find duplicate rows within the same files
     c.execute(
-    """ select %(id_column)s from %(table_name)s
-        where __file_id=1
-        and %(id_column)s in
-            (select %(id_column)s from %(table_name)s
-            where __file_id=1 GROUP BY %(id_column)s
-            having (COUNT(%(id_column)s) > 1))
-    """ % {'table_name': table_name, 'id_column': id_column})
+    """ select id from %(table_name)s
+        where file_id=1
+        and hashed_id in
+            (select hashed_id from %(table_name)s
+            where file_id=1 GROUP BY id
+            having (COUNT(id) > 1))
+    """ % {'table_name': table_name})
 
     nonunique_ids=False
 
@@ -97,19 +93,19 @@ def compare(file1, file2, id_column, conn, table_name):
             first_iteration=False
             sys.stderr.write('Duplicate IDs in %s \n' % (file1,))
             nonunique_ids=True
-        stderr.write('%s\n' % (row[0],))
+        sys.stderr.write('%s\n' % (row[0],))
 
     c.close()
     c=conn.cursor()
 
     c.execute(
-    """ select %(id_column)s from %(table_name)s
-        where __file_id=2
-        and %(id_column)s in
-            (select %(id_column)s from %(table_name)s
-            where __file_id=2 GROUP BY %(id_column)s
-            having (COUNT(%(id_column)s) > 1))
-    """ % {'table_name': table_name, 'id_column': id_column})
+    """ select id from %(table_name)s
+        where file_id=2
+        and hashed_id in
+            (select hashed_id from %(table_name)s
+            where file_id=2 GROUP BY id
+            having (COUNT(id) > 1))
+    """ % {'table_name': table_name})
 
     first_iteration=True
     for row in c:
@@ -117,7 +113,7 @@ def compare(file1, file2, id_column, conn, table_name):
             first_iteration=False
             sys.stderr.write('Duplicate IDs in %s \n' % (file2,))
             nonunique_ids=True
-        stderr.write('%s\n' % (row[0],))
+        sys.stderr.write('%s\n' % (row[0],))
 
     c.close()
     c=conn.cursor()
@@ -130,12 +126,13 @@ def compare(file1, file2, id_column, conn, table_name):
     c=conn.cursor()
 
     # Find rows in file 1, not in file 2
-    c.execute("""
-        select %(id_column)s from %(table_name)s
-        where __file_id=1
-        and %(id_column)s not in 
-            (SELECT %(id_column)s from %(table_name)s where __file_id = 2)
-    """ % {'table_name': table_name, 'id_column': id_column})
+    c.execute(
+    """ select id from %(table_name)s
+        where file_id=1
+        and hashed_id not in
+            (select hashed_id from %(table_name)s
+            where file_id=2)
+    """ % {'table_name': table_name})
 
     first_iteration=True
     for row in c:
@@ -148,12 +145,13 @@ def compare(file1, file2, id_column, conn, table_name):
     c=conn.cursor()
 
     # Find rows in file 2, not in file 1
-    c.execute("""
-        select %(id_column)s from %(table_name)s
-        where __file_id=2
-        and %(id_column)s not in 
-            (SELECT %(id_column)s from %(table_name)s where __file_id = 1)
-    """ % {'table_name': table_name, 'id_column': id_column})
+    c.execute(
+    """ select id from %(table_name)s
+        where file_id=2
+        and hashed_id not in
+            (select hashed_id from %(table_name)s
+            where file_id=1)
+    """ % {'table_name': table_name})
 
     first_iteration=True
     for row in c:
@@ -166,34 +164,37 @@ def compare(file1, file2, id_column, conn, table_name):
     c=conn.cursor()
 
 
-    # Find rows where the IDs match, 
-    # the file_ids do not, and the data is different.
-    column_mismatches = ''
-    for col in header1:
-        if col != id_column:
-            column_mismatches+='(c1.%(col)s != c2.%(col)s) or ' % {'col': col}
+    ## Find rows where the IDs match, the File IDs do not, and the Hashes do not
+    #c.execute(
+    #""" select c1.csv, c2.csv from
+    #        %(table_name)s as c1, %(table_name)s as c2
+    #    where c1.id=c2.id
+    #    and c1.file_id=1 and c2.file_id=2
+    #    and c1.hashed!=c2.hashed
+    #""" % {'table_name': table_name})
 
-    sql="""
-        select c1.%(columns1)s, c2.%(columns2)s from
-            %(table_name)s as c1, %(table_name)s as c2
-        where c1.__file_id=1 and c2.__file_id=2
-        and c1.%(id_column)s = c2.%(id_column)s
-        and (%(column_mismatches)s)
-    """ % {'table_name': table_name, 'columns1': ', c1.'.join(header1),
-            'columns2': ', c2.'.join(header1), 'id_column': id_column,
-            'column_mismatches': column_mismatches[:-4]}
+    # Find rows where the IDs match, the File IDs do not, and the Hashes do not
+    c.execute(
+    """ select c1.csv, c2.csv from %(table_name)s as c1, %(table_name)s as c2
 
-    c.execute(sql)
+        where c1.file_id!=c2.file_id
+
+        -- and c1.hashed_id in
+        --   (select hashed_id from %(table_name)s where file_id=2)
+
+        and c1.hashed_id = c2.hashed_id
+        and c1.hashed != c2.hashed
+        and c1.id = c2.id
+    """ % {'table_name': table_name})
 
     first_iteration=True
-    writer=csv.writer(sys.stdout)
     for row in c:
         if first_iteration:
             first_iteration=False
             sys.stderr.write('Writing mismatched results to stdout\n')
-            writer.writerow(header1)
-        writer.writerow(row[:len(row)/2])
-        writer.writerow(row[len(row)/2:])
+            sys.stdout.write('%s\n' % (','.join(header1)),)
+        sys.stdout.write('%s\n' % (row[0],))
+        sys.stdout.write('%s\n' % (row[1],))
 
     # close the connections
     c.close()
