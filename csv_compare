@@ -5,6 +5,19 @@ import sys
 import os
 import argparse
 
+class RetainValueIterator(object):
+    def __init__(self, f):
+        self.f=f
+        self.val=None
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        self.val=self.f.readline()
+        if not self.val: raise StopIteration()
+        return self.val
+
 def compare(file1, file2, id_column, conn, table_name):
     """
     Compare two csv files
@@ -17,11 +30,13 @@ def compare(file1, file2, id_column, conn, table_name):
     """
     # get a couple of csv readers from the files
     f1=open(file1, 'rb')
-    csv1=csv.reader(f1)
+    r1=RetainValueIterator(f1)
+    csv1=csv.reader(r1)
     header1=csv1.next()
 
     f2=open(file2, 'rb')
-    csv2=csv.reader(f2)
+    r2=RetainValueIterator(f2)
+    csv2=csv.reader(r2)
     header2=csv2.next()
 
     if (header1 != header2):
@@ -52,23 +67,23 @@ def compare(file1, file2, id_column, conn, table_name):
         % (table_name,))
 
     # read the data into the table
-
     row_count=1
     for row in csv1:
         row_count+=1
-        csv_text=unicode(','.join(row), encoding='utf-8').replace("'", "''")
-        sql="""insert into %s (hashed_id, id, file_id, line_number, hashed, csv) values (%d, '%s', 1, %d, %d, '%s')""" % \
-            (table_name, hash(row[id_column_index]), row[id_column_index], row_count, hash(csv_text), csv_text)
-
-        c.execute(sql)
+        if len(row):
+            csv_text=unicode(r1.val, encoding='utf-8').replace("'", "''")
+            sql="""insert into %s (hashed_id, id, file_id, line_number, hashed, csv) values (%d, '%s', 1, %d, %d, '%s')""" % \
+                (table_name, hash(row[id_column_index]), row[id_column_index], row_count, hash(csv_text), csv_text)
+            c.execute(sql)
 
     row_count=1
     for row in csv2:
         row_count+=1
-        csv_text=unicode(','.join(row), encoding='utf-8').replace("'", "''")
-        sql="""insert into %s (hashed_id, id, file_id, line_number, hashed, csv) values (%d, '%s', 2, %d, %d, '%s')""" % \
-            (table_name, hash(row[id_column_index]), row[id_column_index], row_count, hash(csv_text), csv_text)
-        c.execute(sql)
+        if len(row):
+            csv_text=unicode(r2.val, encoding='utf-8').replace("'", "''")
+            sql="""insert into %s (hashed_id, id, file_id, line_number, hashed, csv) values (%d, '%s', 2, %d, %d, '%s')""" % \
+                (table_name, hash(row[id_column_index]), row[id_column_index], row_count, hash(csv_text), csv_text)
+            c.execute(sql)
 
     conn.commit();
 
@@ -162,16 +177,6 @@ def compare(file1, file2, id_column, conn, table_name):
 
     c.close()
     c=conn.cursor()
-
-
-    ## Find rows where the IDs match, the File IDs do not, and the Hashes do not
-    #c.execute(
-    #""" select c1.csv, c2.csv from
-    #        %(table_name)s as c1, %(table_name)s as c2
-    #    where c1.id=c2.id
-    #    and c1.file_id=1 and c2.file_id=2
-    #    and c1.hashed!=c2.hashed
-    #""" % {'table_name': table_name})
 
     # Find rows where the IDs match, the File IDs do not, and the Hashes do not
     c.execute(
