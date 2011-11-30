@@ -71,8 +71,8 @@ def compare(file1, file2, id_column, conn, table_name):
     row_count=1
     for row in csv2:
         row_count+=1
-        sql="""insert into %s values (NULL, 2, %d, '%s')""" % \
-            (table_name, row_count,
+        sql="""insert into %s (%s) values (2, %d, '%s')""" % \
+            (table_name, col_sql, row_count,
             "','".join([unicode(col, encoding='utf-8').replace("'", "''") \
                 for col in row]),)
         c.execute(sql)
