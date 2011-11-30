@@ -1,19 +1,19 @@
 #!/usr/bin/env python2
 
-import sqlite3
 import csv
 import sys
 import os
 import argparse
 
-def compare(file1, file2, id_column, database):
+def compare(file1, file2, id_column, conn, table_name):
     """
     Compare two csv files
 
     file1 - The first file
     file2 - The second file
     id_column - The name of the column containing the unique ID
-    database - sqlite database file path or :memory:
+    conn - Established database connection
+    table_name -- Name of the db table to create for matching
     """
     # get a couple of csv readers from the files
     f1=open(file1, 'rb')
@@ -30,9 +30,6 @@ def compare(file1, file2, id_column, database):
     if id_column not in header1:
         raise Exception('The id coumn does not exist')
 
-    # create a db
-    conn=sqlite3.connect(database)
-
     # assemble create table statement
     col_sql='(__row_id integer primary key, __file_id integer, ' \
             '__line_number integer, '
@@ -41,35 +38,35 @@ def compare(file1, file2, id_column, database):
     col_sql='%s)' % (col_sql[:-2],)
 
     # Create the comparison table
-    conn.execute('create table cmp %s' % (col_sql,))
+    conn.execute('create table %s %s' % (table_name, col_sql,))
 
     # read the data into the table
     row_count=1
     for row in csv1:
         row_count+=1
-        sql="""insert into cmp values (NULL, 1, ?, %s)""" % \
-            (','.join(['?'] * len(row)))
+        sql="""insert into %s values (NULL, 1, ?, %s)""" % \
+            (table_name, ','.join(['?'] * len(row)),)
         conn.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
             for c in row])
 
     row_count=1
     for row in csv2:
         row_count+=1
-        sql="""insert into cmp values (NULL, 2, ?, %s)""" % \
-            (','.join(['?'] * len(row)))
+        sql="""insert into %s values (NULL, 2, ?, %s)""" % \
+            (table_name, ','.join(['?'] * len(row)),)
         conn.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
             for c in row])
 
     # Find duplicate rows within the same files
     c=conn.cursor()
     c.execute(
-    """ select %(id_column)s from cmp
+    """ select %(id_column)s from %(table_name)s
         where __file_id=1
         and %(id_column)s in
-            (select %(id_column)s from cmp
+            (select %(id_column)s from %(table_name)s
             where __file_id=1 GROUP BY %(id_column)s
             having (COUNT(%(id_column)s) > 1))
-    """ % {'id_column': id_column})
+    """ % {'table_name': table_name, 'id_column': id_column})
 
     nonunique_ids=False
 
@@ -85,13 +82,13 @@ def compare(file1, file2, id_column, database):
     c=conn.cursor()
 
     c.execute(
-    """ select %(id_column)s from cmp
+    """ select %(id_column)s from %(table_name)s
         where __file_id=2
         and %(id_column)s in
-            (select %(id_column)s from cmp
+            (select %(id_column)s from %(table_name)s
             where __file_id=2 GROUP BY %(id_column)s
             having (COUNT(%(id_column)s) > 1))
-    """ % {'id_column': id_column})
+    """ % {'table_name': table_name, 'id_column': id_column})
 
     first_iteration=True
     for row in c:
@@ -113,11 +110,11 @@ def compare(file1, file2, id_column, database):
 
     # Find rows in file 1, not in file 2
     c.execute("""
-        select %(id_column)s from cmp
+        select %(id_column)s from %(table_name)s
         where __file_id=1
         and %(id_column)s not in 
-            (SELECT %(id_column)s from cmp where __file_id = 2)
-    """ % {'id_column': id_column})
+            (SELECT %(id_column)s from %(table_name)s where __file_id = 2)
+    """ % {'table_name': table_name, 'id_column': id_column})
 
     first_iteration=True
     for row in c:
@@ -131,11 +128,11 @@ def compare(file1, file2, id_column, database):
 
     # Find rows in file 2, not in file 1
     c.execute("""
-        select %(id_column)s from cmp
+        select %(id_column)s from %(table_name)s
         where __file_id=2
         and %(id_column)s not in 
-            (SELECT %(id_column)s from cmp where __file_id = 1)
-    """ % {'id_column': id_column})
+            (SELECT %(id_column)s from %(table_name)s where __file_id = 1)
+    """ % {'table_name': table_name, 'id_column': id_column})
 
     first_iteration=True
     for row in c:
@@ -156,12 +153,14 @@ def compare(file1, file2, id_column, database):
             column_mismatches+='(c1.%(col)s != c2.%(col)s) or ' % {'col': col}
 
     sql="""
-        select c1.%(columns1)s, c2.%(columns2)s from cmp as c1, cmp as c2
+        select c1.%(columns1)s, c2.%(columns2)s from
+            %(table_name)s as c1, %(table_name)s as c2
         where c1.__file_id=1 and c2.__file_id=2
         and c1.%(id_column)s = c2.%(id_column)s
         and (%(column_mismatches)s)
-    """ % {'columns1': ', c1.'.join(header1), 'columns2': ', c2.'.join(header1),
-            'id_column': id_column, 'column_mismatches': column_mismatches[:-4]}
+    """ % {'table_name': table_name, 'columns1': ', c1.'.join(header1),
+            'columns2': ', c2.'.join(header1), 'id_column': id_column,
+            'column_mismatches': column_mismatches[:-4]}
 
     c.execute(sql)
 
@@ -175,7 +174,27 @@ def compare(file1, file2, id_column, database):
         writer.writerow(row[:len(row)/2])
         writer.writerow(row[len(row)/2:])
 
+    # close the connections
     c.close()
+    conn.close()
+
+def get_db_connection(db_type, database):
+    try:
+        db_handler=__import__(db_type)
+
+        if db_type[:6] == 'sqlite':
+            if db_type != ':memory' and os.path.exists(database):
+                raise argparse.ArgumentTypeError('database file %s already ' \
+                    'exists' % (database,))
+
+        return db_handler.connect(database)
+
+    except ImportError:
+        raise argparse.ArgumentTypeError('Error importing %s module. Make ' \
+                'sure that you have this Python database module installed, ' \
+                'you have spelled it correectly, and that you have the ' \
+                'module on your Python path.' \
+            % (db_type,))
 
 def main(argv=None):
     if argv is None:
@@ -186,23 +205,32 @@ def main(argv=None):
     parser.add_argument('file2', help='second file')
     parser.add_argument('identity_col', metavar='identity column',
         help='identity column name')
+
+    parser.add_argument('-t', '--db-type', help='Database python module',
+            default='sqlite3')
+
     parser.add_argument('-d', '--database', metavar='db',
             default=':memory:',
-            help='sqlite3 database file to be created. :memory: is a ' \
+            help='database connection string. For sqlite3, :memory: is a ' \
                 'special type and will cause no file to be created.')
+
+    parser.add_argument('-n', '--table-name', help='Database table name for ' \
+            'comparison operations',
+            default='__cmp')
 
     args=parser.parse_args(argv[1:])
 
     file1=args.file1
     file2=args.file2
     identity_col=args.identity_col
+    db_type=args.db_type
     database=args.database
+    table_name=args.table_name
 
-    if os.path.exists(database):
-        raise argparse.ArgumentTypeError('database file %s already exists' \
-            % (database,))
+    # get a connection
+    conn=get_db_connection(db_type, database)
 
-    compare(file1, file2, identity_col, database)
+    compare(file1, file2, identity_col, conn, table_name)
 
 if __name__ == "__main__":
         sys.exit(main())

@@ -2,7 +2,7 @@ csv_compare - A CSV Comparison Tool
 ===================================
 
 compare two csv files using an identity column to locate missing rows, 
-duplicates, and data mismatches
+duplicates, and data mismatches using a SQL database
 
 
 Usage
@@ -18,6 +18,16 @@ Or simply run the script with the interpreter
 $ python2 ./csv_compare file1.txt file2.txt identity_column
 or
 $ python ./csv_compare file1.txt file2.txt identity_column
+
+For complete usage instructions, see
+$ python ./csv_compare --help
+
+
+Database
+========
+
+This tool can be used with any SQL database module that implements the Python
+Database API Specification v2.0 (http://www.python.org/dev/peps/pep-0249/)
 
 
 Output
