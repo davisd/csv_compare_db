@@ -57,16 +57,16 @@ def compare(file1, file2, id_column, conn, table_name):
         row_count+=1
         sql="""insert into %s values (NULL, 1, ?, %s)""" % \
             (table_name, ','.join(['?'] * len(row)),)
-        c.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
-            for c in row])
+        c.execute(sql, [row_count] + [unicode(col, encoding='utf-8') \
+            for col in row])
 
     row_count=1
     for row in csv2:
         row_count+=1
         sql="""insert into %s values (NULL, 2, ?, %s)""" % \
             (table_name, ','.join(['?'] * len(row)),)
-        c.execute(sql, [row_count] + [unicode(c, encoding='utf-8') \
-            for c in row])
+        c.execute(sql, [row_count] + [unicode(col, encoding='utf-8') \
+            for col in row])
 
     c.close()
     c=conn.cursor()
