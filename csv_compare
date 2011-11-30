@@ -40,6 +40,14 @@ def compare(file1, file2, id_column, conn, table_name):
     # Create the comparison table
     conn.execute('create table %s %s' % (table_name, col_sql,))
 
+    # Create indexes
+    conn.execute('create index __file_id_index on %s (__file_id)' \
+        % (table_name,))
+
+    conn.execute('create index __%(id_column)s_index on %(table_name)s ' \
+        '(%(id_column)s)' \
+        % {'table_name': table_name, 'id_column': id_column})
+
     # read the data into the table
     row_count=1
     for row in csv1:
