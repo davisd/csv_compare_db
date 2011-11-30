@@ -31,8 +31,7 @@ def compare(file1, file2, id_column, conn, table_name):
         raise Exception('The id coumn does not exist')
 
     # assemble create table statement
-    col_sql='(__row_id integer identity primary key, __file_id integer, ' \
-            '__line_number integer, '
+    col_sql='(__file_id integer, __line_number integer, '
     for col in header1:
         col_sql+='%s text, ' % (col,)
     col_sql='%s)' % (col_sql[:-2],)
