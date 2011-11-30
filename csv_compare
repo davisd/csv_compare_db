@@ -180,7 +180,7 @@ def compare(file1, file2, id_column, conn, table_name):
 
     # Find rows where the IDs match, the File IDs do not, and the Hashes do not
     c.execute(
-    """ select c1.csv, c2.csv from %(table_name)s as c1, %(table_name)s as c2
+    """ select c1.file_id, c1.line_number, c1.csv, c2.file_id, c2.line_number, c2.csv from %(table_name)s as c1, %(table_name)s as c2
 
         where c1.file_id!=c2.file_id
 
@@ -197,9 +197,9 @@ def compare(file1, file2, id_column, conn, table_name):
         if first_iteration:
             first_iteration=False
             sys.stderr.write('Writing mismatched results to stdout\n')
-            sys.stdout.write('%s\n' % (','.join(header1)),)
-        sys.stdout.write('%s\n' % (row[0],))
-        sys.stdout.write('%s\n' % (row[1],))
+            sys.stdout.write('file,line,%s\n' % (','.join(header1)),)
+        sys.stdout.write('%s,%s,%s' % (file1 if row[0] == 1 else file2, row[1], row[2],))
+        sys.stdout.write('%s,%s,%s' % (file1 if row[3] == 1 else file2, row[4], row[5],))
 
     # close the connections
     c.close()
