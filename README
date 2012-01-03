@@ -1,5 +1,5 @@
-csv_compare - A CSV Comparison Tool
-===================================
+csv_compare_db - A CSV Comparison Tool
+======================================
 
 compare two csv files using an identity column to locate missing rows, 
 duplicates, and data mismatches using a SQL database
@@ -32,9 +32,16 @@ Database API Specification v2.0 (http://www.python.org/dev/peps/pep-0249/)
 
 Output
 ======
+
 Duplicate IDs and missing row information is output to stderr. Rows with
 mismatched data are written side by side in csv format to stdout.
 
+Other Tools
+===========
+
+csv_compare - Compare multiple csv files in memory
+csv_compare_db - Compare two csv files using a SQL database
+csv_compare_redis - Compare two csv files using a Redis server
 
 Author
 ======
